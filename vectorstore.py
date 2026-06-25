@@ -21,3 +21,16 @@ def store_chunks(collection_name:str,chunks:list[dict],vectors :list[list[float]
     )
 
     return collection.count()
+
+
+def search_chunks(collection_name:str,query_vector:list[float],top_k:int=5):
+    collection = get_or_create_collection(collection_name)
+    results = collection.query(
+        query_embeddings=[query_vector],
+        n_results=top_k
+    )
+
+    return {
+        "documents": results["documents"][0],
+        "pages": [m["page"] for m in results["metadatas"][0]],
+    }

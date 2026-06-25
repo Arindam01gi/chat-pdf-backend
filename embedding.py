@@ -38,7 +38,7 @@ def embed_query(text:str) ->list[float]:
     result = client.models.embed_content(
         model=embedding_model,
         contents=text,
-        config=types.EmbedContentConfig(task_type="RETRIVAL_QUERY")
+        config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
     )
     return result.embeddings[0].values
 

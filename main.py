@@ -2,12 +2,24 @@ import os
 import re
 import shutil
 from fastapi import FastAPI,UploadFile,HTTPException,File
+from chat import generate_answer
 from pdf_utils import extract_text_from_pdf
 from chunking import chunk_text
-from embedding import embed_texts_batched
-from vectorstore import store_chunks
+from embedding import embed_query, embed_texts_batched
+from vectorstore import search_chunks, store_chunks
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(name="Chat with your pdf")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 UPLOAD_DIR = 'uploads'
 os.makedirs(UPLOAD_DIR,exist_ok=True)
 
@@ -104,6 +116,29 @@ async def process_pdf(filename:str):
        "total_chunks_stored": total_stored
     }
 
+
+class ChatRequest(BaseModel):
+    filename : str
+    question : str
+
+@app.post('/chat')
+async def chat_with_pdf(request:ChatRequest):
+    print(f"RECEIVED QUESTION: '{request.question}'")
+    collection_name = safe_collection_name(request.filename)
+    query_vector = embed_query(request.question)
+    search_results = search_chunks(collection_name, query_vector, top_k=5)
+
+    if not search_results["documents"]:
+        raise HTTPException(status_code=404, detail="No content found. Process the PDF first.")
+    
+
+    answer = generate_answer(request.question, search_results["documents"])
+
+    return {
+        "question": request.question,
+        "answer": answer,
+        "source_pages": sorted(set(search_results["pages"]))
+    }
 
 
 
