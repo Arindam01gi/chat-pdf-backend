@@ -2,6 +2,7 @@ import os
 import shutil
 from fastapi import FastAPI,UploadFile,HTTPException,File
 from pdf_utils import extract_text_from_pdf
+from chunking import chunk_text
 
 app = FastAPI(name="Chat with your pdf")
 UPLOAD_DIR = 'uploads'
@@ -46,10 +47,41 @@ async def extract_pdf(filename : str):
         "total_pages_with_text": len(pages),
         "preview": pages[0] if pages else None
     }
+
+
+@app.post("/chunk")
+async def chunk_pdf(filename:str) :
+    file_path = os.path.join(UPLOAD_DIR,filename)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found. Upload it first.")
     
 
 
+    pages = extract_text_from_pdf(file_path)
+    chunks = chunk_text(pages)
 
+    return {
+        "filename" : filename,
+        "total_chunks": len(chunks),
+        "sample_chunks": chunks[:3]
+    }
+
+    
+
+@app.post('/embed')
+async def embed_pdf(filename:str):
+    file_path = os.path.join(UPLOAD_DIR,filename)
+
+    if not os.path.exists(file_path):
+        return HTTPException(status_code=404,detail="File not found. Upload it first.")
+    
+    pages = extract_text_from_pdf(file_path)
+    chunks = chunk_text(pages)
+
+    sample = chunks[:5]
+    texts = [c["text"] for c in sample]
+    vectors = embed_pdf(texts)
 
 
 
