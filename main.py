@@ -1,12 +1,22 @@
 import os
+import re
 import shutil
 from fastapi import FastAPI,UploadFile,HTTPException,File
 from pdf_utils import extract_text_from_pdf
 from chunking import chunk_text
+from embedding import embed_texts_batched
+from vectorstore import store_chunks
 
 app = FastAPI(name="Chat with your pdf")
 UPLOAD_DIR = 'uploads'
 os.makedirs(UPLOAD_DIR,exist_ok=True)
+
+
+
+def safe_collection_name(filename: str) -> str:
+    # Chroma collection names must be alphanumeric + - _ , no spaces/dots
+    name = re.sub(r"[^a-zA-Z0-9_-]", "_", filename)
+    return name[:60]
 
 
 @app.get("/health")
@@ -69,8 +79,8 @@ async def chunk_pdf(filename:str) :
 
     
 
-@app.post('/embed')
-async def embed_pdf(filename:str):
+@app.post('/process')
+async def process_pdf(filename:str):
     file_path = os.path.join(UPLOAD_DIR,filename)
 
     if not os.path.exists(file_path):
@@ -79,9 +89,20 @@ async def embed_pdf(filename:str):
     pages = extract_text_from_pdf(file_path)
     chunks = chunk_text(pages)
 
-    sample = chunks[:5]
-    texts = [c["text"] for c in sample]
-    vectors = embed_pdf(texts)
+    if not chunks:
+        raise HTTPException(status_code=400, detail="No extractable text found in this PDF.")
+
+    texts = [c["text"] for c in chunks]
+    vectors = embed_texts_batched(texts)
+
+    collection_name = safe_collection_name(filename=filename)
+    total_stored = store_chunks(collection_name,chunks,vectors)
+
+    return {
+       "filename": filename,
+       "collection_name": collection_name,
+       "total_chunks_stored": total_stored
+    }
 
 
 
